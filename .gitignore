@@ -1,0 +1,14 @@
+# Environments
+venv/
+.env
+
+# Python junk
+__pycache__/
+*.pyc
+
+# Local Data (Huge CSVs)
+train_data.csv
+val_data.csv
+
+# Strategy Backups
+backtest_best.py
