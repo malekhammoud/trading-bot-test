@@ -13,7 +13,7 @@ client = OpenAI(
   api_key=API_KEY,
 )
 
-MODEL_ID = "qwen/qwen-3.6-plus:free"
+MODEL_ID = "qwen/qwen3.6-plus-preview:free"
 
 # Strategy directive
 with open("program.md", "r") as f:
