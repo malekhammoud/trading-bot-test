@@ -1,54 +1,50 @@
-# 🤖 Autonomous Crypto StatArb Researcher
+# Crypto StatArb Autonomous Researcher
 
-An automated research loop for cryptocurrency statistical arbitrage, inspired by Andrej Karpathy's `autoresearch` architecture. This system iteratively writes, backtests, and optimizes Python trading strategies using Large Language Models (LLMs) via OpenRouter.
+A fully autonomous research agent for crypto statistical arbitrage, modeled after the `autoresearch` architecture. This system iteratively writes, backtests, and optimizes Shariah-compliant (Long-Only) trading strategies.
 
-## 🏗 Architecture
+## 🚀 Quick Start for Server Deployment
 
-The system consists of four core components:
+### 1. Prerequisites
+Ensure you have Python 3.10+ installed on your server.
 
-1.  **`prepare.py`**: Handles data acquisition. Downloads 2 years of 1-hour OHLCV data for BTC-USD and ETH-USD using `yfinance`, calculates the ETH/BTC spread, and splits data into In-Sample (70%) and Out-of-Sample (30%) sets.
-2.  **`backtest.py`**: The "Target File." This contains the vectorized trading logic. It is the **only** file the agent modifies. It calculates Total Return, Sharpe Ratio, Max Drawdown, and a custom **Fitness Score**.
-3.  **`agent_loop.py`**: The "Researcher." This script manages the Auto-Research cycle. It reads the current strategy, sends results to an LLM, receives improvements, executes the new code, and either accepts the change or reverts based on the Fitness Score.
-4.  **`program.md`**: The "Core Directive." Contains high-level instructions, constraints (vectorization only!), and experimentation ideas for the AI agent.
+### 2. Setup Environment
+```bash
+# Clone the repository
+git clone <your-repo-url>
+cd trading-bot-test
 
-## 🚀 Features
+# Create virtual environment and install dependencies
+python3 -m venv venv
+./venv/bin/pip install -r requirements.txt
+```
 
-- **Autonomous Optimization**: Runs for 100+ iterations to find alpha in the ETH/BTC spread.
-- **Vectorized Backtesting**: Uses `pandas` and `numpy` for high-speed performance evaluation.
-- **LLM Integration**: Utilizes OpenRouter (defaulting to `qwen-3.6-plus-preview`) for state-of-the-art coding logic.
-- **Resilience**: Features exponential backoff for API quota limits and continuous logging of research progress.
-- **Auto-Revert**: If a proposed strategy crashes or performs worse, the system automatically reverts to the previous "Best" version.
+### 3. Prepare Data
+Download 2 years of 1-hour OHLCV data for BTC/ETH:
+```bash
+./venv/bin/python3 prepare.py
+```
 
-## 🛠 Setup
+### 4. Run the Research Loop
+Set your OpenRouter API key and start the 100-iteration optimization:
+```bash
+export OPENROUTER_API_KEY='your_api_key'
+nohup ./venv/bin/python3 agent_loop.py &
+```
+The `nohup` command ensures the loop continues running even if you disconnect from the server.
 
-1.  **Clone the Repository**:
-    ```bash
-    git clone <your-repo-url>
-    cd trading-bot-test
-    ```
+## 📁 File Structure
+- `agent_loop.py`: The "Researcher" (Orchestrates the LLM and optimization).
+- `backtest.py`: The "Strategy" (The target file modified by the agent).
+- `prepare.py`: Data utility for downloading/aligning BTC-ETH spreads.
+- `program.md`: The "Directive" (Rules and constraints for the AI).
+- `train_data.csv` / `val_data.csv`: Historical data (70/30 split).
 
-2.  **Create Environment**:
-    ```bash
-    python -m venv venv
-    source venv/bin/activate
-    pip install -r requirements.txt
-    ```
+## ⚖️ Shariah Compliance
+This system is strictly configured for **Long-Only** spot strategies. Short selling and borrowing are forbidden via the `program.md` directive and baseline code structure.
 
-3.  **Prepare Data**:
-    ```bash
-    python prepare.py
-    ```
-
-4.  **Run Research Loop**:
-    ```bash
-    export OPENROUTER_API_KEY='your_api_key'
-    python agent_loop.py
-    ```
-
-## 📊 Performance Metric
-The agent optimizes for a **Continuous Fitness Score**:
-`Fitness = Total Return + (Sharpe / 10) - (MaxDD * 2)`
-This allows the agent to recognize incremental improvements even while the strategy is still in negative territory.
-
-## ⚠️ Disclaimer
-This project is for educational and research purposes only. Trading cryptocurrencies involves significant risk. Never trade with money you cannot afford to lose.
+## 📈 Monitoring
+You can monitor the progress by tailing the logs if you use redirection:
+```bash
+tail -f nohup.out
+```
+Once the loop is finished, the best-performing code will be stored in `backtest.py`.

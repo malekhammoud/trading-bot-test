@@ -1,6 +1,7 @@
 import os
 import subprocess
 import time
+from datetime import datetime
 from openai import OpenAI
 
 # API Key configuration
@@ -13,7 +14,8 @@ client = OpenAI(
   api_key=API_KEY,
 )
 
-MODEL_ID = "qwen/qwen3.6-plus-preview:free"
+MODEL_ID = "qwen/qwen-3.6-plus:free"
+RESEARCH_LOG_FILE = "research_log.md"
 
 # Strategy directive
 with open("program.md", "r") as f:
@@ -41,14 +43,52 @@ def read_code():
     with open("backtest.py", "r") as f:
         return f.read()
 
+def append_to_research_log(iteration, summary, score, decision):
+    """Appends a single research entry to the permanent log file."""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_entry = f"### Iteration {iteration} ({timestamp})\n"
+    log_entry += f"- **Summary:** {summary}\n"
+    log_entry += f"- **Score:** {score}\n"
+    log_entry += f"- **Decision:** {decision}\n\n"
+    
+    with open(RESEARCH_LOG_FILE, "a") as f:
+        f.write(log_entry)
+
+def get_recent_failures_from_log(limit=5):
+    """Reads the permanent log to find the most recent failed attempts for context."""
+    if not os.path.exists(RESEARCH_LOG_FILE):
+        return "No prior research history."
+    
+    failures = []
+    with open(RESEARCH_LOG_FILE, "r") as f:
+        lines = f.readlines()
+        
+    # We'll work backwards from the end of the file
+    current_summary = ""
+    for line in reversed(lines):
+        if "- **Decision:** REJECTED" in line:
+            # The summary is on the line above it (Score is between them)
+            # Find the summary for this rejection
+            pass # We'll need a better parser if we want to be exact
+            
+    # Simpler: just get the last few REJECTED lines for now
+    recent_rejections = [line for line in lines if "- **Summary:**" in line or "- **Decision:** REJECTED" in line]
+    # To keep context lean, we'll just extract the summaries of the last 5 rejections
+    # (Actually, let's keep it simple: the in-memory failure_log is fine for the session,
+    # and the file is for permanent human review.)
+    return "\n".join(recent_rejections[-10:]) # Summaries + Decisions
+
 def main():
     best_score = -999.0
     best_code = read_code()
     
-    # Context Management: Keep only the last 5 failed attempts to prevent bloat
-    failure_log = [] 
+    # Session memory (clears on success)
+    session_failure_log = [] 
     
     print(f"Starting 100-Iteration Deep Research Loop ({MODEL_ID})...")
+    if not os.path.exists(RESEARCH_LOG_FILE):
+        with open(RESEARCH_LOG_FILE, "w") as f:
+            f.write("# Research Log: Autonomous Crypto StatArb\n\n")
     
     # Initial run
     output, best_score = run_backtest()
@@ -58,8 +98,8 @@ def main():
     while iteration <= 100:
         print(f"\n--- Iteration {iteration} ---")
         
-        # Build the condensed history string
-        history_context = "\n".join(failure_log[-5:]) if failure_log else "No recent failures."
+        # Build the condensed history string from session failures
+        history_context = "\n".join(session_failure_log[-5:]) if session_failure_log else "No recent failures in this session."
         
         prompt = f"""
         {DIRECTIVE}
@@ -99,7 +139,6 @@ def main():
                 summary = raw_text.split("SUMMARY:")[1].split("CODE:")[0].strip()
                 new_code = raw_text.split("```python")[1].split("```")[0].strip()
             except:
-                # Fallback if the LLM ignores formatting
                 summary = "Code mutation attempted."
                 new_code = raw_text.replace("```python", "").replace("```", "").strip()
             
@@ -111,13 +150,14 @@ def main():
             
             if new_score > best_score:
                 print(f"SUCCESS: New Best Score: {new_score}")
+                append_to_research_log(iteration, summary, new_score, "SUCCESS")
                 best_score = new_score
                 best_code = new_code
-                # On success, we can clear the failure log as the baseline has shifted
-                failure_log = [] 
+                session_failure_log = [] 
             else:
                 print("REJECTED: Reverting.")
-                failure_log.append(f"- Tried: {summary} (Score: {new_score})")
+                append_to_research_log(iteration, summary, new_score, "REJECTED")
+                session_failure_log.append(f"- Tried: {summary} (Score: {new_score})")
                 save_code(best_code)
             
             iteration += 1

@@ -9,7 +9,8 @@ Your goal is to maximize the **Fitness Score** of the crypto statistical arbitra
 Higher is ALWAYS better. Optimize your strategy to climb out of negative scores into positive ones.
 
 ## Constraints
-1.  **Vectorization:** All calculations MUST be vectorized using Pandas or NumPy. Do not use `for` loops.
+1.  **LONG ONLY:** Strictly no short selling. The strategy must only enter 'Long' positions (position = 1) or stay 'Flat' (position = 0). Selling an asset you do not own is forbidden.
+2.  **Vectorization:** All calculations MUST be vectorized using Pandas or NumPy. Do not use `for` loops.
 2.  **Dependencies:** Use only `pandas`, `numpy`, and `scipy`.
 3.  **Output:** The script must always print the four required metrics at the end:
     *   Total Return
