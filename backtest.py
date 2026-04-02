@@ -8,45 +8,54 @@ def run_backtest():
         print("Error: train_data.csv not found.")
         return
 
-    # Hyperparameters optimized for maximizing fitness (focus on DD reduction & signal quality)
-    LOOKBACK = 48
-    ENTRY_TH = 3.0
-    EXIT_TH = 0.5
-    POS_SCALE = 0.18  # Conservative sizing heavily protects against DD penalty
-
-    # Feature Engineering
-    df['ma'] = df['spread'].rolling(LOOKBACK, min_periods=LOOKBACK).mean()
-    df['std'] = df['spread'].rolling(LOOKBACK, min_periods=LOOKBACK).std().clip(lower=1e-6)
+    # 1. Feature Engineering & Signal Generation
+    df['ret_spread'] = df['spread'].pct_change().fillna(0.0)
+    
+    # EWMA for faster adaptation to regime shifts
+    span = 48
+    df['ma'] = df['spread'].ewm(span=span).mean()
+    df['std'] = df['spread'].ewm(span=span).std().clip(lower=1e-6)
     df['z'] = (df['spread'] - df['ma']) / df['std']
     
-    # Validity mask ensures we only trade after warmup when Z-score is stable
-    valid_mask = df['z'].notna()
-
-    # Signal Generation
+    # 2. Regime Filtering: Avoid mean reversion during strong trends
+    # Filter out periods where short-term momentum significantly deviates from long-term baseline
+    df['ma_short'] = df['spread'].rolling(20).mean()
+    df['ma_long'] = df['spread'].rolling(80).mean()
+    trend_dev = ((df['ma_short'] - df['ma_long']) / df['ma_long']).abs()
+    valid_mask = df['z'].notna() & (trend_dev < 0.012)
+    
+    # 3. Signal Thresholds (Tuned for higher signal-to-noise ratio)
+    ENTRY_TH = 2.2
+    EXIT_TH = 0.5
     entry_long = (df['z'] < -ENTRY_TH) & valid_mask
     entry_short = (df['z'] > ENTRY_TH) & valid_mask
     exit_any = (df['z'].abs() < EXIT_TH) | ~valid_mask
-
-    # Fully Vectorized State Machine
-    events = pd.Series(0.0, index=df.index, dtype=float)
-    events[entry_long] = 1.0
-    events[entry_short] = -1.0
-    events[exit_any] = 0.0
     
-    blocks = exit_any.cumsum()
-    df['pos'] = events.replace(0.0, np.nan).groupby(blocks).ffill().fillna(0.0) * POS_SCALE
+    # 4. Fully Vectorized State Machine
+    signals = pd.Series(np.nan, index=df.index, dtype=float)
+    signals[entry_long] = 1.0
+    signals[entry_short] = -1.0
+    signals[exit_any] = 0.0
     
-    # Returns & Transaction Costs
-    df['ret_spread'] = df['spread'].pct_change().fillna(0.0)
+    # Forward fill preserves state between signals. Exits set state to 0.
+    df['pos_raw'] = signals.ffill().fillna(0.0)
     
-    # Lag position by 1 period to avoid look-ahead bias
-    df['strat_ret'] = df['pos'].shift(1) * df['ret_spread']
+    # 5. Volatility Targeting for Drawdown Control & Sharpe Optimization
+    # Scale positions inversely to realized volatility. Higher vol -> smaller size.
+    df['roll_vol'] = df['ret_spread'].rolling(24).std().clip(lower=1e-6)
+    # Target ~0.08% hourly volatility per unit, clipped to prevent leverage extremes
+    df['vol_scale'] = (0.0008 / df['roll_vol']).shift(1).clip(0.4, 1.8)
+    df['pos'] = df['pos_raw'].shift(1) * df['vol_scale']
     
+    # 6. Returns & Transaction Costs
+    df['gross_ret'] = df['pos'] * df['ret_spread']
+    
+    # Turnover is the absolute change in position size
     df['turnover'] = df['pos'].diff().abs().fillna(0.0)
     df['fees'] = df['turnover'] * 0.001 
-    df['net_ret'] = df['strat_ret'] - df['fees']
+    df['net_ret'] = df['gross_ret'] - df['fees']
     
-    # Performance Metrics
+    # 7. Performance Metrics
     total_return = (1 + df['net_ret']).prod() - 1.0
     
     hourly_std = df['net_ret'].std()
