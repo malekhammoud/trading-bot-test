@@ -79,20 +79,15 @@ def get_recent_failures_from_log(limit=5):
     return "\n".join(recent_rejections[-10:]) # Summaries + Decisions
 
 def main():
-    best_score = -999.0
-    best_code = read_code()
-    
     # Session memory (clears on success)
     session_failure_log = [] 
     
     print(f"Starting 100-Iteration Deep Research Loop ({MODEL_ID})...")
-    if not os.path.exists(RESEARCH_LOG_FILE):
-        with open(RESEARCH_LOG_FILE, "w") as f:
-            f.write("# Research Log: Autonomous Crypto StatArb\n\n")
     
-    # Initial run
+    # Run baseline FIRST to sync with the current best_code on disk
     output, best_score = run_backtest()
-    print(f"Baseline Score: {best_score}")
+    best_code = read_code()
+    print(f"Baseline (Current Best) Score: {best_score}")
     
     iteration = 1
     while iteration <= 100:
