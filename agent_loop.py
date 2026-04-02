@@ -14,7 +14,7 @@ client = OpenAI(
   api_key=API_KEY,
 )
 
-MODEL_ID = "qwen/qwen-3.6-plus:free"
+MODEL_ID = "qwen/qwen3.6-plus-preview:free"
 RESEARCH_LOG_FILE = "research_log.md"
 
 # Strategy directive
